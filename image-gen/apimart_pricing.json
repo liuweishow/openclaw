@@ -1,23 +1,32 @@
 {
-  "video": {
-    "unit_price_usd_per_s": 0.007
-  },
-  "image": {
-    "models": {
-      "gemini-3-pro-image-preview": {
-        "unit_price_usd": {
-          "1K": 0.05,
-          "2K": 0.05,
-          "4K": 0.1
+    "display": {
+        "show_usd": true,
+        "show_cny": true,
+        "show_unit_labels": true,
+        "cny_exchange_rate": 7.0
+    },
+    "storage": {
+        "output_dir": "~/.openclaw/output_dir"
+    },
+    "video": {
+        "unit_price_usd_per_s": 0.007
+    },
+    "image": {
+        "models": {
+            "gemini-3-pro-image-preview": {
+                "unit_price_usd": {
+                    "1K": 0.05,
+                    "2K": 0.05,
+                    "4K": 0.1
+                }
+            },
+            "gemini-3-pro-image-preview-official": {
+                "unit_price_usd": {
+                    "1K": 0.1072,
+                    "2K": 0.1072,
+                    "4K": 0.192
+                }
+            }
         }
-      },
-      "gemini-3-pro-image-preview-official": {
-        "unit_price_usd": {
-          "1K": 0.1072,
-          "2K": 0.1072,
-          "4K": 0.192
-        }
-      }
     }
-  }
 }

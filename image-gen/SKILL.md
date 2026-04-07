@@ -11,7 +11,24 @@ name: image-gen
 - “生图 / 生成图片 / 画一张 / 文生图 / AI 图片 / 海报 / 插画 / 壁纸”
 - “修图 / 改图 / 抠图 / 换背景 / 风格迁移 / 变成xx风格 / 去掉xx / 加上xx”
 - “上传图片 / 把这张图传上去 / 图片转成 URL”
-- “查询任务 / 查进度 / task_id / 任务状态”
+- “查询图片任务 / 查图片任务 / 查生图任务 / 查修图任务 / 图片任务状态 / 生图进度 / 修图进度”
+- “查询任务 task_xxx / 查一下 task_xxx / task_xxx 任务状态 / task_xxx 进度”
+
+### 触发优先级与消歧
+
+当用户消息里出现 `task_` / `taskId` / `task_id` 时，按以下规则判断是否应触发当前技能：
+
+1. 若当前对话上下文明确是图片相关（生图、修图、上传图片、参考图、图片 URL、海报、插画等），则优先触发 `image-gen`
+2. 若用户说“查询任务 task_xxx / 查一下 task_xxx”这类通用表述，但没有明确提到视频，应优先读取本地任务元数据 `~/.openclaw/apimart_task_meta.json`
+3. 若元数据中该 `task_id` 对应 `type=image`，则必须由当前技能处理并调用 `GET /v1/tasks/{task_id}`
+4. 只有当上下文明确是视频，或元数据命中 `type=video` 时，才应交给 `video-gen`
+
+推荐优先匹配的用户说法示例：
+
+- “查询任务 task_01xxx”
+- “查一下 task_01xxx”
+- “这个生图任务 task_01xxx 现在到哪了”
+- “帮我看下图片任务 task_01xxx 的状态”
 
 ## 可用服务
 
@@ -47,11 +64,11 @@ APIMART_API_KEY=sk-...
 
 ```json
 {
-  "url": "https://upload.apimart.ai/f/image/...-photo.jpg",
-  "filename": "photo.jpg",
-  "content_type": "image/jpeg",
-  "bytes": 235680,
-  "created_at": 1743436800
+    "url": "https://upload.apimart.ai/f/image/...-photo.jpg",
+    "filename": "photo.jpg",
+    "content_type": "image/jpeg",
+    "bytes": 235680,
+    "created_at": 1743436800
 }
 ```
 
@@ -62,26 +79,26 @@ APIMART_API_KEY=sk-...
 
 请求参数：
 
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| model | string | 是 | - | 模型名称 |
-| prompt | string | 是 | - | 图片描述，支持中英文 |
-| size | string | 否 | 1:1 | 1:1 / 16:9 / 9:16 / 3:2 / 2:3 等（具体见模型文档） |
-| n | integer | 否 | 1 | 生成张数，1-4 |
-| resolution | string | 否 | 1K | 输出分辨率：1K / 2K / 4K |
-| image_urls | string[] | 否 | - | 参考图片 URL（支持图生图/变体），最多 14 张（Gemini Pro） |
+| 参数       | 类型     | 必填 | 默认值 | 说明                                                      |
+| ---------- | -------- | ---- | ------ | --------------------------------------------------------- |
+| model      | string   | 是   | -      | 模型名称                                                  |
+| prompt     | string   | 是   | -      | 图片描述，支持中英文                                      |
+| size       | string   | 否   | 1:1    | 1:1 / 16:9 / 9:16 / 3:2 / 2:3 等（具体见模型文档）        |
+| n          | integer  | 否   | 1      | 生成张数，1-4                                             |
+| resolution | string   | 否   | 1K     | 输出分辨率：1K / 2K / 4K                                  |
+| image_urls | string[] | 否   | -      | 参考图片 URL（支持图生图/变体），最多 14 张（Gemini Pro） |
 
 提交成功响应：
 
 ```json
 {
-  "code": 200,
-  "data": [
-    {
-      "status": "submitted",
-      "task_id": "task_01JNXXXXXXXXXXXXXXXXXX"
-    }
-  ]
+    "code": 200,
+    "data": [
+        {
+            "status": "submitted",
+            "task_id": "task_01JNXXXXXXXXXXXXXXXXXX"
+        }
+    ]
 }
 ```
 
@@ -89,10 +106,26 @@ APIMART_API_KEY=sk-...
 
 生图默认使用 Gemini Pro 预览模型，单价不写死在技能中，统一从技能目录内的价格配置读取：`apimart_pricing.json`。
 
-默认应包含以下价格（USD）：
+展示预计费用时，必须按以下路径实时读取配置，不要在回复或模板中写死价格：
 
-- `gemini-3-pro-image-preview`: `1K/2K = $0.05`，`4K = $0.1000`
-- `gemini-3-pro-image-preview-official`: `1K/2K = $0.1072`，`4K = $0.1920`
+```json
+image.models[model].unit_price_usd[resolution]
+```
+
+价格展示方式也必须从同一个配置文件读取，建议增加以下字段：
+
+```json
+display.show_usd
+display.show_cny
+display.show_unit_labels
+display.cny_exchange_rate
+```
+
+本地保存路径也必须从同一个配置文件读取（macOS/Windows 通用，支持 `~`）：
+
+```json
+storage.output_dir
+```
 
 提交前提示用户的价格（按张计费）：
 
@@ -100,7 +133,16 @@ APIMART_API_KEY=sk-...
 预计费用(USD) = 单价(USD/张) * n
 ```
 
-仅展示 USD 价格。
+推荐展示格式：
+
+```text
+单价(USD/张): <$unit_price_from_config>
+预计费用(USD): <$unit_price_from_config * n>
+```
+
+当 `display.show_cny=true` 时，还应按 `display.cny_exchange_rate` 换算并展示人民币。
+
+当 `display.show_unit_labels=false` 时，不强制展示 `USD/张`、`CNY/张` 这类单位标签，但仍应按启用的币种输出金额。
 
 ### 3.1) 查询 Token 余额（生成前调用）
 
@@ -115,7 +157,7 @@ APIMART_API_KEY=sk-...
 查询时应向用户回传：
 
 - `status` / `progress`
-- 若已完成：结果 `images[0].url[0]`
+- 若已完成：结果 `images[0].url[0]`；并自动下载到 `~/.openclaw/image_task_{task_id}.*`（若本地不存在则重新下载），然后输出 `MEDIA: <local_path>` 发送图片
 - `price`（USD）：优先从本地任务元数据读取；若没有元数据则提示无法确定
 - 当前 API Key 的余额信息：`remain_balance` / `used_balance`（调用 `GET /v1/user/balance`）
 
@@ -131,20 +173,20 @@ APIMART_API_KEY=sk-...
 
 ```json
 {
-  "code": 200,
-  "data": {
-    "id": "task_...",
-    "status": "completed",
-    "progress": 100,
-    "result": {
-      "images": [
-        {
-          "url": ["https://upload.apimart.ai/f/image/...png"],
-          "expires_at": 1763174708
+    "code": 200,
+    "data": {
+        "id": "task_...",
+        "status": "completed",
+        "progress": 100,
+        "result": {
+            "images": [
+                {
+                    "url": ["https://upload.apimart.ai/f/image/...png"],
+                    "expires_at": 1763174708
+                }
+            ]
         }
-      ]
     }
-  }
 }
 ```
 
@@ -154,79 +196,67 @@ APIMART_API_KEY=sk-...
 
 1. 收集用户参数：`prompt`、`size`、`n`
 2. 选择模型与参数：
-   - 默认：`gemini-3-pro-image-preview` + `resolution=1K` + `n=1`
-   - 需要更稳定/更接近官方效果时：切换到 `gemini-3-pro-image-preview-official`
+    - 默认：`gemini-3-pro-image-preview` + `resolution=1K` + `n=1`
+    - 需要更稳定/更接近官方效果时：切换到 `gemini-3-pro-image-preview-official`
 3. **提交前必须提示预计费用（USD）并让用户确认**
 4. 调用 `POST /v1/images/generations` 提交任务
 5. 获取 `task_id`，并**立即回传给用户**（方便用户主动查询/中断/追踪）
-6. 使用 `cron` 工具创建一个每 10 秒触发的定时查询任务：调用 `GET /v1/tasks/{task_id}`，并用 `message` 工具把进度回传到当前会话；直到 `status=completed/failed/cancelled` 后自动停止定时任务
+6. 默认使用 `cron` 工具创建一个每 10 秒触发的查询任务，并运行在当前主会话：调用 `GET /v1/tasks/{task_id}`，持续回传进度；直到 `status=completed/failed/cancelled` 后自动停止
 7. 完成后返回生成图片 URL，同时回传本次预计消耗（USD）
 
 ### B. 图生图（包含上传）
 
 1. 用户提供图片（本地路径/截图/文件）时：
-   - 优先使用上传接口 `POST /v1/uploads/images` 获取 URL
+    - 优先使用上传接口 `POST /v1/uploads/images` 获取 URL
 2. 选择模型与参数（同 A）
 3. **提交前必须提示预计费用（USD）并让用户确认**
 4. 调用 `POST /v1/images/generations`，传入：
-   - `prompt`
-   - `image_urls: [<uploaded_url>, ...]`
+    - `prompt`
+    - `image_urls: [<uploaded_url>, ...]`
 5. 获取 `task_id`，并**立即回传给用户**
-6. 使用 `cron` 工具创建一个每 10 秒触发的定时查询任务：调用 `GET /v1/tasks/{task_id}`，并用 `message` 工具把进度回传到当前会话；直到 `status=completed/failed/cancelled` 后自动停止定时任务
+6. 默认使用 `cron` 工具创建一个每 10 秒触发的查询任务，并运行在当前主会话：调用 `GET /v1/tasks/{task_id}`，持续回传进度；直到 `status=completed/failed/cancelled` 后自动停止
 7. 完成后返回结果图片 URL，同时回传本次预计消耗（USD）
 
-## 定时查询（cron + message）
+## 定时查询（默认 cron + 主会话）
 
-当图片生成/编辑提交成功后（拿到 `task_id`），优先使用 `cron` 工具进行后台轮询，并使用 `message` 工具向当前会话推送进度。
+当图片生成/编辑提交成功后（拿到 `task_id`），默认应使用 `cron` 在当前主会话中执行定时轮询，不要创建 `isolated` 隔离会话。
 
-### 行为约定
-
-- 轮询频率：每 10 秒一次（`everyMs = 10000`）
-- cron 返回的 `job_id` 需要保存（至少保存在本次对话上下文中），以便用户请求“停止轮询”时能准确停掉对应任务
-- 每次轮询：
-  - 调用 `GET /v1/tasks/{task_id}?language=zh`
-  - 解析并回传 `status` / `progress`
-  - 若 `completed`：回传 `images[0].url[0]`，并可选下载到本地后输出 `MEDIA:`
-  - 若 `failed/cancelled`：回传失败原因（如有 `fail_reason`），并停止定时任务
-- 超时：最多 5 分钟，超时后停止定时任务并提示用户稍后用 `task_id` 手动查询
-- 可中断：若用户说“停止查询/停止轮询”，应立即停止该 `task_id` 对应的 cron job
-
-### cron payload 正确配置（经过实际测试可用）
-
-**参考成功案例（喝水提醒）**，创建 cron job 必须使用以下配置才能自动触发推送：
+推荐配置应与已验证可用的视频技能保持一致：
 
 ```json
 {
-  "action": "add",
-  "name": "Poll image task {task_id}",
-  "schedule": {
-    "kind": "every",
-    "everyMs": 10000
-  },
-  "payload": {
-    "kind": "systemEvent",
-    "text": "查询任务 {task_id}"
-  },
-  "sessionTarget": "main",
-  "enabled": true
+    "action": "add",
+    "name": "Poll image task {task_id}",
+    "schedule": {
+        "kind": "every",
+        "everyMs": 10000
+    },
+    "payload": {
+        "kind": "systemEvent",
+        "text": "查询图片任务 {task_id}"
+    },
+    "sessionTarget": "main",
+    "delivery": {
+        "mode": "none"
+    },
+    "enabled": true
 }
 ```
 
-**关键配置**：
-| 参数 | 值 | 说明 |
-|------|-----|------|
-| `sessionTarget` | `main` | 在当前主会话运行（`isolated` 隔离会话推送不工作） |
-| `payload.kind` | `systemEvent` | 系统事件触发查询，和喝水提醒一样能正常工作 |
-| `payload.text` | `"查询任务 {task_id}"` | 触发对话查询，工具会自动处理 |
-| `everyMs` | `10000` | 每 10 秒轮询一次 |
+### 行为约定
 
-**行为约定**：
-- 每次轮询：调用 `GET /v1/tasks/{task_id}?language=zh` 查询状态
-- 通过 `message` 工具推送 `status/progress` 到当前会话
-- 若 `completed`：下载图片到本地，推送完整结果 + `MEDIA:` 指令 + 价格信息，然后删除 cron job
-- 若 `failed/cancelled`：推送失败信息，删除 cron job
-- 超时：最多 5 分钟，超时后删除 cron job 并提示用户稍后手动查询
-- 可中断：用户说"停止查询"可立即停止对应 cron job
+- 默认模式：`cron`（运行在 `main` 主会话）
+- 可选模式：`current`（当前命令直接轮询）、`none`（仅提交并返回 `task_id`）
+- 轮询频率：每 10 秒一次（`everyMs = 10000`）
+- 每次轮询：
+    - 调用 `GET /v1/tasks/{task_id}?language=zh`
+    - 解析并回传 `status` / `progress`
+    - 若 `completed`：回传 `images[0].url[0]` 在线地址与价格信息
+    - 若 `failed/cancelled`：回传失败原因（如有 `fail_reason`），并停止轮询
+- 超时：最多 5 分钟，超时后停止轮询并提示用户稍后用 `task_id` 手动查询
+- 会话要求：`cron` 必须配置为 `main` 主会话；不要使用 `isolated`
+- payload 要求：优先使用 `systemEvent`，不要再用隔离 agent turn 方式模拟轮询
+- 可中断：若当前使用 `current`，应停止当前命令内正在执行的轮询逻辑；若使用 `cron`，则停止对应 `cron job`
 
 ## task_id 使用约定
 
@@ -238,8 +268,8 @@ APIMART_API_KEY=sk-...
 由于任务查询响应不一定包含计费信息，技能应在提交任务时把关键信息落盘，便于后续用户只提供 `task_id` 就能查询并显示费用：
 
 - 路径：
-  - macOS/Linux: `~/.openclaw/apimart_task_meta.json`
-  - Windows: `%USERPROFILE%\\.openclaw\\apimart_task_meta.json`
+    - macOS/Linux: `~/.openclaw/apimart_task_meta.json`
+    - Windows: `%USERPROFILE%\\.openclaw\\apimart_task_meta.json`
 - 记录字段建议包含：`task_id`、`type`、`model`、`resolution`、`n`、`unit_price_usd`、`estimated_cost_usd`
 
 ## 下载与发送（可选）
@@ -247,10 +277,15 @@ APIMART_API_KEY=sk-...
 当用户希望“直接发图”，可按以下方式处理：
 
 1. 下载图片到：
-   - macOS/Linux: `~/.openclaw/generated_image.png`
-   - Windows: `%USERPROFILE%\\.openclaw\\generated_image.png`
+    - macOS/Linux: `~/.openclaw/generated_image.png`
+    - Windows: `%USERPROFILE%\\.openclaw\\generated_image.png`
 2. 发送：
-   - `MEDIA: ~/.openclaw/generated_image.png`
+    - `MEDIA: ~/.openclaw/generated_image.png`
+
+脚本模式（`scripts/grok-image.js`）可通过参数控制：
+
+- 默认：只回传在线 `images[0].url[0]`
+- 当用户要求“发图/发送图片/直接发图”时：使用 `--deliver=media`，完成后会下载到 `~/.openclaw/image_task_{task_id}.*` 并输出 `MEDIA: <path>`
 
 ## 错误处理
 
@@ -262,7 +297,7 @@ APIMART_API_KEY=sk-...
 ## 工具使用
 
 - **read**: 读取本地图片（用于确认文件存在/格式）
-- **exec**: 调用上传、生成、查询任务、下载
-- **cron**: 定时触发查询任务（每 10 秒）
-- **message**: 将轮询进度/结果推送到当前会话
-- **MEDIA:**: 发送图片到当前窗口
+- **exec**: 调用上传、生成、查询任务（下载仅在用户明确要求时使用）
+- **cron**: 默认在当前主会话中每 10 秒查询一次任务状态并回传进度
+- **当前命令轮询**: 当用户明确要求同步等待结果时，在同一个命令里每 10 秒查询一次任务状态并直接输出进度
+- **MEDIA:**: 可选，仅在用户要求发送本地图片文件时使用

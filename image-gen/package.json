@@ -1,0 +1,12 @@
+{
+    "name": "image-gen",
+    "version": "1.0.0",
+    "description": "使用 APIMart 的 Grok Imagine 1.0 API 生成/编辑图片（文生图、修图），并支持把本地图片上传到 APIMart 获取可用 URL，再用于后续生成任务。",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC"
+}
