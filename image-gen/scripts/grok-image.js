@@ -332,7 +332,6 @@ function createCronWatcher({ taskId, language }) {
         '--disabled',
         '--every',
         '10s',
-        '--exact',
         '--announce',
         '--channel',
         'last',
@@ -763,6 +762,8 @@ async function main() {
                 taskId: id,
                 url: imageUrl,
             })
+            console.log(`· 本地路径：${localPath}`)
+            // 这一行输出纯文本 MEDIA: 绝对路径，让底层插件拦截并发送文件
             console.log(`\nMEDIA: ${localPath}`)
         }
 
